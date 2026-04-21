@@ -1,11 +1,6 @@
 {
-  "name": "news-feed",
-  "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "rss-parser": "^3.13.0"
-  },
-  "scripts": {
-    "update": "node scripts/update.js"
+    "fast-xml-parser": "^4.5.0"
   }
 }
