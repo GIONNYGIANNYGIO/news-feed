@@ -2,8 +2,11 @@ name: Update RSS Feed
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # ogni 30 minuti
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -21,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run update script
+      - name: Run script
         run: node scripts/update.js
 
       - name: Commit changes
