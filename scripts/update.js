@@ -4,84 +4,72 @@ if (!fs.existsSync("data")) {
   fs.mkdirSync("data");
 }
 
-// 🔵 GITHUB (stabili)
-const GITHUB_FEEDS = [
-  "https://feeds.feedburner.com/Speedhunters",
-  "https://www.carscoops.com/feed/"
+const FEEDS = [
+  { url: "https://feeds.feedburner.com/Speedhunters", source: "Speedhunters" },
+  { url: "https://www.carscoops.com/feed/", source: "Carscoops" },
+  { url: "https://www.stancenation.com/feed/", source: "StanceNation" },
+  { url: "https://stanceworks.com/feed/", source: "StanceWorks" }
 ];
 
-// 🟡 FOURTHWALL (instabili ma li proviamo comunque)
-const FOURTHWALL_FEEDS = [
-  "https://www.stancenation.com/feed/",
-  "https://stanceworks.com/feed/"
-];
-
+// fetch semplice (NO dipendenze)
 async function fetchXML(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error("fetch fail");
+  if (!res.ok) return null;
   return await res.text();
 }
 
-// parsing semplice RSS
-function parse(xml, source) {
+// ESTRAZIONE SEMPLICE E STABILE
+function extract(tag, xml) {
+  const match = xml.match(new RegExp(`<${tag}>(.*?)<\/${tag}>`));
+  return match ? match[1] : "";
+}
+
+// immagine SOLO base (no hack complicati)
+function extractImage(xml) {
+  let img =
+    xml.match(/<media:content[^>]*url="(.*?)"/)?.[1] ||
+    xml.match(/<enclosure[^>]*url="(.*?)"/)?.[1] ||
+    xml.match(/<img[^>]+src="(.*?)"/)?.[1];
+
+  return img || "";
+}
+
+// parsing RSS semplice e robusto
+function parseItems(xml, source) {
   const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
 
-  return items.map(m => {
-    const b = m[1];
+  return items.map(i => {
+    const block = i[1];
 
     return {
-      title: b.match(/<title>(.*?)<\/title>/)?.[1] || "",
-      link: b.match(/<link>(.*?)<\/link>/)?.[1] || "",
-      img: b.match(/<media:content.*?url="(.*?)"/)?.[1] || "",
-      date: b.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString(),
+      title: extract("title", block),
+      link: extract("link", block),
+      img: extractImage(block),
+      date: extract("pubDate", block) || new Date().toISOString(),
       source
     };
   });
-}
-
-// retry semplice per feed difficili
-async function safeFetch(url, retries = 2) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fetchXML(url);
-    } catch (e) {
-      if (i === retries - 1) return null;
-    }
-  }
-  return null;
 }
 
 async function run() {
 
   let all = [];
 
-  // 🔵 GITHUB FEEDS (sempre affidabili)
-  for (const url of GITHUB_FEEDS) {
+  for (const feed of FEEDS) {
     try {
-      const xml = await fetchXML(url);
-      const source = url.includes("speedhunters") ? "Speedhunters" : "Carscoops";
-      all.push(...parse(xml, source));
+      const xml = await fetchXML(feed.url);
+
+      if (!xml) continue;
+
+      const items = parseItems(xml, feed.source);
+
+      all.push(...items);
+
     } catch (e) {
-      console.log("❌ GitHub feed error:", url);
+      console.log("❌ error:", feed.url);
     }
   }
 
-  // 🟡 FOURTHWALL FEEDS (con fallback)
-  for (const url of FOURTHWALL_FEEDS) {
-    const xml = await safeFetch(url, 2);
-
-    if (!xml) {
-      console.log("⚠️ Fourthwall skipped:", url);
-      continue;
-    }
-
-    const source =
-      url.includes("stancenation") ? "StanceNation" : "StanceWorks";
-
-    all.push(...parse(xml, source));
-  }
-
-  // sort globale
   all.sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const output = all.slice(0, 40);
@@ -91,7 +79,7 @@ async function run() {
     JSON.stringify(output, null, 2)
   );
 
-  console.log("✅ UNIFIED FEED READY:", output.length);
+  console.log("✅ FEED BUILT:", output.length);
 }
 
 run();
