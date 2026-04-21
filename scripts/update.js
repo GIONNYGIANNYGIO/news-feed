@@ -5,10 +5,10 @@ if (!fs.existsSync("data")) {
 }
 
 const FEEDS = [
-  { url: "https://feeds.feedburner.com/Speedhunters", source: "Speedhunters" },
-  { url: "https://www.carscoops.com/feed/", source: "Carscoops" },
-  { url: "https://www.stancenation.com/feed/", source: "StanceNation" },
-  { url: "https://stanceworks.com/feed/", source: "StanceWorks" }
+  "https://www.carscoops.com/feed/",
+  "https://www.motor1.com/rss/all/news/",
+  "https://feeds.feedburner.com/Speedhunters",
+  "https://www.motorsport.com/rss/all/news/"
 ];
 
 // fetch semplice (NO dipendenze)
