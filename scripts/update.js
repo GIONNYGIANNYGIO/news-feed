@@ -4,48 +4,63 @@ if (!fs.existsSync("data")) {
   fs.mkdirSync("data");
 }
 
+// 4 FEED STABILI
 const FEEDS = [
-  "https://www.carscoops.com/feed/",
-  "https://www.motor1.com/rss/all/news/",
-  "https://feeds.feedburner.com/Speedhunters",
-  "https://www.motorsport.com/rss/all/news/"
+  { url: "https://www.carscoops.com/feed/", source: "Carscoops" },
+  { url: "https://www.motor1.com/rss/all/news/", source: "Motor1" },
+  { url: "https://feeds.feedburner.com/Speedhunters", source: "Speedhunters" },
+  { url: "https://www.motorsport.com/rss/all/news/", source: "Motorsport" }
 ];
 
-// fetch semplice (NO dipendenze)
 async function fetchXML(url) {
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  return await res.text();
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+
+    if (!res.ok) return null;
+
+    return await res.text();
+
+  } catch (e) {
+    console.log("❌ fetch fail:", url);
+    return null;
+  }
 }
 
-// ESTRAZIONE SEMPLICE E STABILE
-function extract(tag, xml) {
-  const match = xml.match(new RegExp(`<${tag}>(.*?)<\/${tag}>`));
-  return match ? match[1] : "";
-}
+// 🔥 PARSER ROBUSTO (FIX VERO)
+function parseRSS(xml, source) {
 
-// immagine SOLO base (no hack complicati)
-function extractImage(xml) {
-  let img =
-    xml.match(/<media:content[^>]*url="(.*?)"/)?.[1] ||
-    xml.match(/<enclosure[^>]*url="(.*?)"/)?.[1] ||
-    xml.match(/<img[^>]+src="(.*?)"/)?.[1];
+  if (!xml) return [];
 
-  return img || "";
-}
+  // FIX: supporta RSS + ATOM base
+  const items = xml.split("<item>");
 
-// parsing RSS semplice e robusto
-function parseItems(xml, source) {
-  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+  if (items.length < 2) {
+    console.log("⚠️ no <item> found in:", source);
+    return [];
+  }
 
-  return items.map(i => {
-    const block = i[1];
+  return items.slice(1).map(block => {
+
+    const title = block.match(/<title>(.*?)<\/title>/)?.[1] || "";
+    const link = block.match(/<link>(.*?)<\/link>/)?.[1] || "";
+    const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString();
+
+    // immagini (best effort)
+    let img =
+      block.match(/<media:content[^>]*url="(.*?)"/)?.[1] ||
+      block.match(/<enclosure[^>]*url="(.*?)"/)?.[1] ||
+      block.match(/<img[^>]+src="(.*?)"/)?.[1] ||
+      "";
 
     return {
-      title: extract("title", block),
-      link: extract("link", block),
-      img: extractImage(block),
-      date: extract("pubDate", block) || new Date().toISOString(),
+      title,
+      link,
+      img,
+      date: pubDate,
       source
     };
   });
@@ -56,18 +71,19 @@ async function run() {
   let all = [];
 
   for (const feed of FEEDS) {
-    try {
-      const xml = await fetchXML(feed.url);
 
-      if (!xml) continue;
+    const xml = await fetchXML(feed.url);
 
-      const items = parseItems(xml, feed.source);
-
-      all.push(...items);
-
-    } catch (e) {
-      console.log("❌ error:", feed.url);
+    if (!xml) {
+      console.log("❌ error:", feed.source);
+      continue;
     }
+
+    const items = parseRSS(xml, feed.source);
+
+    console.log(`✔ ${feed.source}:`, items.length);
+
+    all.push(...items);
   }
 
   all.sort((a, b) => new Date(b.date) - new Date(a.date));
