@@ -1,7 +1,11 @@
-const fs = require("fs");
+import fs from "fs";
+import Parser from "rss-parser";
 
-const Parser = require("rss-parser");
 const parser = new Parser();
+
+if (!fs.existsSync("data")) {
+  fs.mkdirSync("data");
+}
 
 const FEEDS = [
   "https://feeds.feedburner.com/Speedhunters",
@@ -18,13 +22,15 @@ async function run() {
       const feed = await parser.parseURL(url);
 
       feed.items.forEach(item => {
+        let img =
+          item.enclosure?.url ||
+          item.content?.match(/<img[^>]+src="([^">]+)"/i)?.[1] ||
+          "";
+
         all.push({
           title: item.title || "",
           link: item.link || "",
-          img:
-            item.enclosure?.url ||
-            item.content?.match(/<img[^>]+src="([^">]+)"/i)?.[1] ||
-            "",
+          img: img,
           date: item.pubDate || new Date().toISOString(),
           author: item.creator || feed.title,
           source: feed.title
@@ -36,10 +42,8 @@ async function run() {
     }
   }
 
-  // ordina per data
   all.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // limita output
   const output = all.slice(0, 30);
 
   fs.writeFileSync(
