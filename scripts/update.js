@@ -4,7 +4,7 @@ if (!fs.existsSync("data")) {
   fs.mkdirSync("data");
 }
 
-// 4 FEED STABILI
+// 🔵 FEED STABILI
 const FEEDS = [
   { url: "https://www.carscoops.com/feed/", source: "Carscoops" },
   { url: "https://feeds.feedburner.com/Speedhunters", source: "Speedhunters" },
@@ -12,6 +12,9 @@ const FEEDS = [
   { url: "https://www.autoexpress.co.uk/feeds/all", source: "AutoExpress" }
 ];
 
+// -----------------------------
+// FETCH SAFE
+// -----------------------------
 async function fetchXML(url) {
   try {
     const res = await fetch(url, {
@@ -22,50 +25,99 @@ async function fetchXML(url) {
 
     if (!res.ok) return null;
 
-    return await res.text();
+    const text = await res.text();
+
+    // evita HTML invece di RSS
+    if (!text || text.includes("<html")) return null;
+
+    return text;
 
   } catch (e) {
-    console.log("❌ fetch fail:", url);
+    console.log("❌ fetch error:", url);
     return null;
   }
 }
 
-// 🔥 PARSER ROBUSTO (FIX VERO)
-function parseRSS(xml, source) {
+// -----------------------------
+// IMAGE EXTRACTION
+// -----------------------------
+function extractImage(block) {
+  return (
+    block.match(/<media:content[^>]*url="(.*?)"/)?.[1] ||
+    block.match(/<enclosure[^>]*url="(.*?)"/)?.[1] ||
+    block.match(/<img[^>]+src="(.*?)"/)?.[1] ||
+    ""
+  );
+}
 
+// -----------------------------
+// PARSER RSS
+// -----------------------------
+function parse(xml, source) {
   if (!xml) return [];
 
-  // FIX: supporta RSS + ATOM base
   const items = xml.split("<item>");
-
-  if (items.length < 2) {
-    console.log("⚠️ no <item> found in:", source);
-    return [];
-  }
+  if (items.length < 2) return [];
 
   return items.slice(1).map(block => {
-
     const title = block.match(/<title>(.*?)<\/title>/)?.[1] || "";
     const link = block.match(/<link>(.*?)<\/link>/)?.[1] || "";
-    const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString();
-
-    // immagini (best effort)
-    let img =
-      block.match(/<media:content[^>]*url="(.*?)"/)?.[1] ||
-      block.match(/<enclosure[^>]*url="(.*?)"/)?.[1] ||
-      block.match(/<img[^>]+src="(.*?)"/)?.[1] ||
-      "";
+    const date = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || new Date().toISOString();
 
     return {
       title,
       link,
-      img,
-      date: pubDate,
+      img: extractImage(block),
+      date,
       source
     };
   });
 }
 
+// -----------------------------
+// SAFE IMAGE FALLBACK
+// -----------------------------
+function safeImage(item) {
+  return item.img || "https://via.placeholder.com/800x500?text=No+Image";
+}
+
+// -----------------------------
+// DEDUPLICA
+// -----------------------------
+function dedupe(items) {
+  const seen = new Set();
+
+  return items.filter(item => {
+    const key = (item.title || "").toLowerCase().trim();
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+
+    return true;
+  });
+}
+
+// -----------------------------
+// SCORE (ranking intelligente)
+// -----------------------------
+function score(item) {
+  const t = (item.title || "").toLowerCase();
+
+  let s = 0;
+
+  if (t.includes("breaking")) s += 100;
+  if (t.includes("f1")) s += 60;
+  if (t.includes("formula")) s += 50;
+  if (t.includes("race")) s += 40;
+  if (t.includes("motorsport")) s += 30;
+  if (t.includes("tuning")) s += 10;
+
+  return s;
+}
+
+// -----------------------------
+// RUN
+// -----------------------------
 async function run() {
 
   let all = [];
@@ -79,14 +131,26 @@ async function run() {
       continue;
     }
 
-    const items = parseRSS(xml, feed.source);
+    const items = parse(xml, feed.source);
 
     console.log(`✔ ${feed.source}:`, items.length);
 
     all.push(...items);
   }
 
-  all.sort((a, b) => new Date(b.date) - new Date(a.date));
+  // fallback immagini
+  all = all.map(i => ({
+    ...i,
+    img: safeImage(i)
+  }));
+
+  // deduplica
+  all = dedupe(all);
+
+  // ranking + data
+  all.sort((a, b) => {
+    return (score(b) + new Date(b.date)) - (score(a) + new Date(a.date));
+  });
 
   const output = all.slice(0, 40);
 
