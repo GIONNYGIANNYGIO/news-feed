@@ -7,9 +7,9 @@ if (!fs.existsSync("data")) {
 // 4 FEED STABILI
 const FEEDS = [
   { url: "https://www.carscoops.com/feed/", source: "Carscoops" },
-  { url: "https://www.motor1.com/rss/all/news/", source: "Motor1" },
   { url: "https://feeds.feedburner.com/Speedhunters", source: "Speedhunters" },
-  { url: "https://www.motorsport.com/rss/all/news/", source: "Motorsport" }
+  { url: "https://www.motorsport.com/rss/all/news/", source: "Motorsport" },
+  { url: "https://www.autoexpress.co.uk/feeds/all", source: "AutoExpress" }
 ];
 
 async function fetchXML(url) {
